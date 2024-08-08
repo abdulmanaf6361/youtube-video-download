@@ -62,6 +62,7 @@ def views(request):
             print("yt: ", yt)
 
             # Get the highest resolution stream
+            print("before")
             stream = yt.streams.get_highest_resolution()
             if not stream:
                 raise Exception("No available stream found.")
