@@ -1,11 +1,12 @@
 import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
+from botocore.exceptions import NoCredentialsError
 from pytube import YouTube
 from pytube.exceptions import RegexMatchError
 from django.shortcuts import render
 import os
 from moviepy.editor import VideoFileClip
 from decouple import config
+
 
 # AWS S3 settings
 S3_BUCKET_NAME = config('S3_BUCKET_NAME')
@@ -17,15 +18,12 @@ def homePage(request):
     return render(request, 'index.html')
 
 def trim_video(input_path, output_path, start_time, end_time):
-    try:
-        # Load the video file
-        with VideoFileClip(input_path) as video:
-            # Trim the video
-            trimmed_video = video.subclip(start_time, end_time)
-            # Save the trimmed video to a new file
-            trimmed_video.write_videofile(output_path, codec='libx264')
-    except Exception as e:
-        print(f"Error while trimming video: {e}")
+    # Load the video file
+    with VideoFileClip(input_path) as video:
+        # Trim the video
+        trimmed_video = video.subclip(start_time, end_time)
+        # Save the trimmed video to a new file
+        trimmed_video.write_videofile(output_path, codec='libx264')
 
 def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
     s3_client = boto3.client('s3', region_name=region_name,
@@ -33,22 +31,14 @@ def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
                              aws_secret_access_key=secret_key)
     try:
         file_name = os.path.basename(file_path)
-        print(f"Uploading {file_name} to S3 bucket {bucket_name}")
-        s3_client.upload_file(file_path, bucket_name, file_name, ExtraArgs={'ACL': 'public-read'})
+        s3_client.upload_file(file_path, bucket_name, file_name)
         public_url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{file_name}"
-        print(f"File uploaded successfully: {public_url}")
         return public_url
     except FileNotFoundError:
         print("The file was not found")
         return None
     except NoCredentialsError:
         print("Credentials not available")
-        return None
-    except ClientError as e:
-        print(f"Client error: {e}")
-        return None
-    except Exception as e:
-        print(f"S3 upload error: {e}")
         return None
 
 def views(request):
@@ -60,18 +50,10 @@ def views(request):
         try:
             yt = YouTube(url)
             print("yt: ", yt)
-            
-            # Print all available streams
-            streams = yt.streams
-            print("Available streams:")
-            for stream in streams:
-                print(f"Stream: {stream}")
 
             # Get the highest resolution stream
             stream = yt.streams.get_highest_resolution()
-            if not stream:
-                raise Exception("No available stream found.")
-            print("Selected stream: ", stream)
+            print("stream: ", stream)
 
             # Define the download path
             download_path = '/home/ubuntu/youtube-video-download/'
@@ -81,7 +63,6 @@ def views(request):
             # Download the video
             video_file_name = f"{yt.title}.mp4"
             video_file_path = os.path.join(download_path, video_file_name)
-            print(f"Downloading video to: {video_file_path}")
             stream.download(output_path=download_path, filename=video_file_name)
             print(f"Video downloaded to: {video_file_path}")
 
@@ -99,7 +80,7 @@ def views(request):
 
             # Provide the download link and file path
             new_url = stream.url
-            video_file_url = f"/home/ubuntu/youtube-video-download/{video_file_name}"  # Update this as needed
+            video_file_url = f"/path-to-your-media/{video_file_name}"  # Update this as needed
             trimmed_video_file_url = s3_url
 
             return render(request, 'index.html', {
@@ -107,16 +88,16 @@ def views(request):
                 'video_file_url': video_file_url,
                 'trimmed_video_file_url': trimmed_video_file_url
             })
-        except RegexMatchError as e:
-            print(f"RegexMatchError: {e}")
+        except RegexMatchError:
             new_url = None
             video_file_url = None
             trimmed_video_file_url = None
+            print("RegexMatchError: Could not find match.")
         except Exception as e:
-            print(f"Exception: {e}")
             new_url = None
             video_file_url = None
             trimmed_video_file_url = None
+            print(f"Exception: {e}")
         print("Final new_url: ", new_url)
         return render(request, 'index.html', {
             'new_url': new_url,
