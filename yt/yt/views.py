@@ -52,8 +52,7 @@ def views(request):
             print("yt: ", yt)
 
             # Get the highest resolution stream
-            stream = yt.streams.all()
-            stream = stream[0]
+            stream = yt.streams.get_highest_resolution()
             print("stream: ", stream)
 
             # Define the download path
