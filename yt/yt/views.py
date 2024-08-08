@@ -64,6 +64,8 @@ def views(request):
 
             # Get the highest resolution stream
             stream = yt.streams.get_highest_resolution()
+            if not stream:
+                raise Exception("No available stream found.")
             print("stream: ", stream)
 
             # Define the download path
