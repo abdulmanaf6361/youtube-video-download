@@ -60,13 +60,18 @@ def views(request):
         try:
             yt = YouTube(url)
             print("yt: ", yt)
+            
+            # Print all available streams
+            streams = yt.streams
+            print("Available streams:")
+            for stream in streams:
+                print(f"Stream: {stream}")
 
             # Get the highest resolution stream
-            print("before")
             stream = yt.streams.get_highest_resolution()
             if not stream:
                 raise Exception("No available stream found.")
-            print("stream: ", stream)
+            print("Selected stream: ", stream)
 
             # Define the download path
             download_path = '/home/ubuntu/youtube-video-download/'
@@ -76,6 +81,7 @@ def views(request):
             # Download the video
             video_file_name = f"{yt.title}.mp4"
             video_file_path = os.path.join(download_path, video_file_name)
+            print(f"Downloading video to: {video_file_path}")
             stream.download(output_path=download_path, filename=video_file_name)
             print(f"Video downloaded to: {video_file_path}")
 
@@ -101,8 +107,8 @@ def views(request):
                 'video_file_url': video_file_url,
                 'trimmed_video_file_url': trimmed_video_file_url
             })
-        except RegexMatchError:
-            print("RegexMatchError: Could not find match.")
+        except RegexMatchError as e:
+            print(f"RegexMatchError: {e}")
             new_url = None
             video_file_url = None
             trimmed_video_file_url = None
