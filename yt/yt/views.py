@@ -60,7 +60,6 @@ def views(request):
         try:
             yt = YouTube(url)
             print("yt: ", yt)
-            print("Streams available: ", yt.streams)
 
             # Get the highest resolution stream
             stream = yt.streams.get_highest_resolution()
