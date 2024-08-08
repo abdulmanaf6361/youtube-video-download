@@ -1,12 +1,11 @@
 import boto3
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import NoCredentialsError, ClientError
 from pytube import YouTube
 from pytube.exceptions import RegexMatchError
 from django.shortcuts import render
 import os
 from moviepy.editor import VideoFileClip
 from decouple import config
-
 
 # AWS S3 settings
 S3_BUCKET_NAME = config('S3_BUCKET_NAME')
@@ -18,12 +17,15 @@ def homePage(request):
     return render(request, 'index.html')
 
 def trim_video(input_path, output_path, start_time, end_time):
-    # Load the video file
-    with VideoFileClip(input_path) as video:
-        # Trim the video
-        trimmed_video = video.subclip(start_time, end_time)
-        # Save the trimmed video to a new file
-        trimmed_video.write_videofile(output_path, codec='libx264')
+    try:
+        # Load the video file
+        with VideoFileClip(input_path) as video:
+            # Trim the video
+            trimmed_video = video.subclip(start_time, end_time)
+            # Save the trimmed video to a new file
+            trimmed_video.write_videofile(output_path, codec='libx264')
+    except Exception as e:
+        print(f"Error while trimming video: {e}")
 
 def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
     s3_client = boto3.client('s3', region_name=region_name,
@@ -31,14 +33,22 @@ def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
                              aws_secret_access_key=secret_key)
     try:
         file_name = os.path.basename(file_path)
-        s3_client.upload_file(file_path, bucket_name, file_name)
+        print(f"Uploading {file_name} to S3 bucket {bucket_name}")
+        s3_client.upload_file(file_path, bucket_name, file_name, ExtraArgs={'ACL': 'public-read'})
         public_url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{file_name}"
+        print(f"File uploaded successfully: {public_url}")
         return public_url
     except FileNotFoundError:
         print("The file was not found")
         return None
     except NoCredentialsError:
         print("Credentials not available")
+        return None
+    except ClientError as e:
+        print(f"Client error: {e}")
+        return None
+    except Exception as e:
+        print(f"S3 upload error: {e}")
         return None
 
 def views(request):
@@ -50,6 +60,7 @@ def views(request):
         try:
             yt = YouTube(url)
             print("yt: ", yt)
+            print("Streams available: ", yt.streams)
 
             # Get the highest resolution stream
             stream = yt.streams.get_highest_resolution()
@@ -89,15 +100,15 @@ def views(request):
                 'trimmed_video_file_url': trimmed_video_file_url
             })
         except RegexMatchError:
-            new_url = None
-            video_file_url = None
-            trimmed_video_file_url = None
             print("RegexMatchError: Could not find match.")
-        except Exception as e:
             new_url = None
             video_file_url = None
             trimmed_video_file_url = None
+        except Exception as e:
             print(f"Exception: {e}")
+            new_url = None
+            video_file_url = None
+            trimmed_video_file_url = None
         print("Final new_url: ", new_url)
         return render(request, 'index.html', {
             'new_url': new_url,
