@@ -52,11 +52,12 @@ def views(request):
             print("yt: ", yt)
 
             # Get the highest resolution stream
-            stream = yt.streams.get_highest_resolution()
+            stream = yt.streams.all()
+            stream = stream[0]
             print("stream: ", stream)
 
             # Define the download path
-            download_path = r'C:\Users\Abdul Manaf\Desktop\yt-down\temp\temp'
+            download_path = '/home/ubuntu/youtube-video-download/'
             if not os.path.exists(download_path):
                 os.makedirs(download_path)
 
@@ -80,7 +81,7 @@ def views(request):
 
             # Provide the download link and file path
             new_url = stream.url
-            video_file_url = f"/path-to-your-media/{video_file_name}"  # Update this as needed
+            video_file_url = f"/home/ubuntu/youtube-video-download/{video_file_name}"  # Update this as needed
             trimmed_video_file_url = s3_url
 
             return render(request, 'index.html', {
