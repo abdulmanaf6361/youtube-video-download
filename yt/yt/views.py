@@ -65,30 +65,26 @@ def views(request):
 
             video_file_name = f"{yt.title}.mp4"
             video_file_path = os.path.join(download_path, video_file_name)
+            logging.debug(f"Downloading video to: {video_file_path}")
             stream.download(output_path=download_path, filename=video_file_name)
-            logging.debug(f"Video downloaded to: {video_file_path}")
 
             trimmed_video_file_name = f"trimmed_{yt.title}.mp4"
             trimmed_video_file_path = os.path.join(download_path, trimmed_video_file_name)
 
+            logging.debug(f"Trimming video: {video_file_path} to {trimmed_video_file_path}")
             trim_video(video_file_path, trimmed_video_file_path, start_time, end_time)
-            logging.debug(f"Trimmed video saved to: {trimmed_video_file_path}")
 
             s3_url = upload_to_s3(trimmed_video_file_path, S3_BUCKET_NAME, S3_REGION_NAME, S3_ACCESS_KEY, S3_SECRET_KEY)
             logging.debug(f"Uploaded to S3: {s3_url}")
 
-            new_url = stream.url
-            video_file_url = f"/path-to-your-media/{video_file_name}"
-            trimmed_video_file_url = s3_url
-
             return render(request, 'index.html', {
-                'new_url': new_url,
-                'video_file_url': video_file_url,
-                'trimmed_video_file_url': trimmed_video_file_url
+                'new_url': stream.url,
+                'video_file_url': video_file_path,  # Local path
+                'trimmed_video_file_url': s3_url
             })
 
-        except RegexMatchError:
-            logging.error("RegexMatchError: Could not find match.")
+        except RegexMatchError as e:
+            logging.error(f"RegexMatchError: {e}")
         except Exception as e:
             logging.error(f"Exception: {e}")
 
