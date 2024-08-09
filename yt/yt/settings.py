@@ -52,7 +52,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
 
 ]
-
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 CORS_ALLOW_ALL_ORIGINS = True 
 
 ROOT_URLCONF = 'yt.urls'
