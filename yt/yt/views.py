@@ -47,12 +47,16 @@ def trim_video(input_path, output_path, start_time, end_time):
     except Exception as e:
         print(f"Error in trimming video: {e}")
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def views(request):
     if request.method == 'POST':
         url = request.POST.get('link')
         start_time = int(request.POST.get('start_time', 0))
         end_time = int(request.POST.get('end_time', 10))
-        download_path = r'C:\Users\Abdul Manaf\Desktop\yt-down\temp\temp'
+        download_path = '/home/ubuntu/youtube-video-download/yt'
         downloaded_filename = os.path.join(download_path, 'a.mp4')
         trimmed_filename = os.path.join(download_path, 'trimmed_a.mp4')
         new_url = None
@@ -62,6 +66,8 @@ def views(request):
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': downloaded_filename,
+                'username': 'oauth2',
+                'password': '',  # OAuth2
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
@@ -71,19 +77,19 @@ def views(request):
                     raise FileNotFoundError(f"Downloaded file {downloaded_filename} does not exist.")
                 
                 # Trim the video
-                print(f"Trimming video from {downloaded_filename} to {trimmed_filename}")
+                logger.info(f"Trimming video from {downloaded_filename} to {trimmed_filename}")
                 trim_video(downloaded_filename, trimmed_filename, start_time, end_time)
                 
                 # Upload to S3
                 s3_url = upload_to_s3(trimmed_filename, S3_BUCKET_NAME, S3_REGION_NAME, S3_ACCESS_KEY, S3_SECRET_KEY)
-                print(f"Uploaded to S3: {s3_url}")
+                logger.info(f"Uploaded to S3: {s3_url}")
                 trimmed_video_file_url = s3_url
 
         except Exception as e:
             new_url = None
-            print(f"Exception: {e}")
+            logger.error(f"Exception: {e}")
         
-        print("Final new_url: ", new_url)
+        logger.info("Final new_url: ", new_url)
         return render(request, 'index.html', {'new_url': new_url, 'trimmed_video_file_url': trimmed_video_file_url})
     else:
         return render(request, 'index.html')
