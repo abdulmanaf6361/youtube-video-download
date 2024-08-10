@@ -1,12 +1,11 @@
 import boto3
 from botocore.exceptions import NoCredentialsError
-from pytube import YouTube
-from pytube.exceptions import RegexMatchError
 from django.shortcuts import render
 import os
 from moviepy.editor import VideoFileClip
 from decouple import config
-
+import re
+import yt_dlp
 
 # AWS S3 settings
 S3_BUCKET_NAME = config('S3_BUCKET_NAME')
@@ -16,14 +15,6 @@ S3_SECRET_KEY = config('S3_SECRET_KEY')
 
 def homePage(request):
     return render(request, 'index.html')
-
-def trim_video(input_path, output_path, start_time, end_time):
-    # Load the video file
-    with VideoFileClip(input_path) as video:
-        # Trim the video
-        trimmed_video = video.subclip(start_time, end_time)
-        # Save the trimmed video to a new file
-        trimmed_video.write_videofile(output_path, codec='libx264')
 
 def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
     s3_client = boto3.client('s3', region_name=region_name,
@@ -41,57 +32,58 @@ def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
         print("Credentials not available")
         return None
 
-import logging
+def sanitize_filename(filename):
+    # Remove any characters that might cause issues
+    return re.sub(r'[<>:"/\\|?*｜]', '', filename).strip()
 
-logging.basicConfig(level=logging.DEBUG)
+def trim_video(input_path, output_path, start_time, end_time):
+    if not os.path.isfile(input_path):
+        print(f"Error: File {input_path} does not exist.")
+        return
+    try:
+        with VideoFileClip(input_path) as video:
+            trimmed_video = video.subclip(start_time, end_time)
+            trimmed_video.write_videofile(output_path, codec='libx264')
+    except Exception as e:
+        print(f"Error in trimming video: {e}")
 
 def views(request):
     if request.method == 'POST':
         url = request.POST.get('link')
         start_time = int(request.POST.get('start_time', 0))
         end_time = int(request.POST.get('end_time', 10))
-        logging.debug(f"url: {url}")
-
+        download_path = r'C:\Users\Abdul Manaf\Desktop\yt-down\temp\temp'
+        downloaded_filename = os.path.join(download_path, 'a.mp4')
+        trimmed_filename = os.path.join(download_path, 'trimmed_a.mp4')
+        new_url = None
+        trimmed_video_file_url = None
+        
         try:
-            yt = YouTube(url)
-            logging.debug(f"yt: {yt}")
+            ydl_opts = {
+                'format': 'best',
+                'outtmpl': downloaded_filename,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+                
+                # Verify if the file exists after downloading
+                if not os.path.isfile(downloaded_filename):
+                    raise FileNotFoundError(f"Downloaded file {downloaded_filename} does not exist.")
+                
+                # Trim the video
+                print(f"Trimming video from {downloaded_filename} to {trimmed_filename}")
+                trim_video(downloaded_filename, trimmed_filename, start_time, end_time)
+                
+                # Upload to S3
+                s3_url = upload_to_s3(trimmed_filename, S3_BUCKET_NAME, S3_REGION_NAME, S3_ACCESS_KEY, S3_SECRET_KEY)
+                print(f"Uploaded to S3: {s3_url}")
+                trimmed_video_file_url = s3_url
 
-            stream = yt.streams.get_highest_resolution()
-            logging.debug(f"stream: {stream}")
-
-            download_path = '/home/ubuntu/youtube-video-download/'
-            if not os.path.exists(download_path):
-                os.makedirs(download_path)
-
-            video_file_name = f"{yt.title}.mp4"
-            video_file_path = os.path.join(download_path, video_file_name)
-            logging.debug(f"Downloading video to: {video_file_path}")
-            stream.download(output_path=download_path, filename=video_file_name)
-
-            trimmed_video_file_name = f"trimmed_{yt.title}.mp4"
-            trimmed_video_file_path = os.path.join(download_path, trimmed_video_file_name)
-
-            logging.debug(f"Trimming video: {video_file_path} to {trimmed_video_file_path}")
-            trim_video(video_file_path, trimmed_video_file_path, start_time, end_time)
-
-            s3_url = upload_to_s3(trimmed_video_file_path, S3_BUCKET_NAME, S3_REGION_NAME, S3_ACCESS_KEY, S3_SECRET_KEY)
-            logging.debug(f"Uploaded to S3: {s3_url}")
-
-            return render(request, 'index.html', {
-                'new_url': stream.url,
-                'video_file_url': video_file_path,  # Local path
-                'trimmed_video_file_url': s3_url
-            })
-
-        except RegexMatchError as e:
-            logging.error(f"RegexMatchError: {e}")
         except Exception as e:
-            logging.error(f"Exception: {e}")
-
-        return render(request, 'index.html', {
-            'new_url': None,
-            'video_file_url': None,
-            'trimmed_video_file_url': None
-        })
+            new_url = None
+            print(f"Exception: {e}")
+        
+        print("Final new_url: ", new_url)
+        return render(request, 'index.html', {'new_url': new_url, 'trimmed_video_file_url': trimmed_video_file_url})
     else:
         return render(request, 'index.html')
