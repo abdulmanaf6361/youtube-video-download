@@ -32,9 +32,7 @@ def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
         print("Credentials not available")
         return None
 
-def sanitize_filename(filename):
-    # Remove any characters that might cause issues
-    return re.sub(r'[<>:"/\\|?*｜]', '', filename).strip()
+
 
 def trim_video(input_path, output_path, start_time, end_time):
     if not os.path.isfile(input_path):
@@ -66,8 +64,6 @@ def views(request):
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': downloaded_filename,
-                'username': 'oauth2',
-                'password': '',  # OAuth2
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
