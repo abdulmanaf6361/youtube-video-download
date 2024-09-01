@@ -4,12 +4,12 @@ from django.shortcuts import render
 import os
 from moviepy.editor import VideoFileClip
 from decouple import config
-import re
 import yt_dlp
+from django.views.decorators.csrf import csrf_exempt
 
 # AWS S3 settings
 S3_BUCKET_NAME = config('S3_BUCKET_NAME')
-S3_REGION_NAME = config('S3_REGION_NAME')  
+S3_REGION_NAME = config('S3_REGION_NAME')
 S3_ACCESS_KEY = config('S3_ACCESS_KEY')
 S3_SECRET_KEY = config('S3_SECRET_KEY')
 
@@ -32,10 +32,6 @@ def upload_to_s3(file_path, bucket_name, region_name, access_key, secret_key):
         print("Credentials not available")
         return None
 
-def sanitize_filename(filename):
-    # Remove any characters that might cause issues
-    return re.sub(r'[<>:"/\\|?*｜]', '', filename).strip()
-
 def trim_video(input_path, output_path, start_time, end_time):
     if not os.path.isfile(input_path):
         print(f"Error: File {input_path} does not exist.")
@@ -47,16 +43,22 @@ def trim_video(input_path, output_path, start_time, end_time):
     except Exception as e:
         print(f"Error in trimming video: {e}")
 
-import logging
+def time_to_seconds(time_str):
+    """Convert HH:MM:SS time string to seconds."""
+    h, m, s = map(int, time_str.split(':'))
+    return h * 3600 + m * 60 + s
 
-logger = logging.getLogger(__name__)
-
+@csrf_exempt
 def views(request):
     if request.method == 'POST':
         url = request.POST.get('link')
-        start_time = int(request.POST.get('start_time', 0))
-        end_time = int(request.POST.get('end_time', 10))
-        download_path = '/home/ubuntu/youtube-video-download/yt'
+        start_time_str = request.POST.get('start_time', '00:00:00')
+        end_time_str = request.POST.get('end_time', '00:00:10')
+        
+        # Convert time strings to seconds
+        start_time = time_to_seconds(start_time_str)
+        end_time = time_to_seconds(end_time_str)
+        download_path = '/youtube-video-download/yt/'
         downloaded_filename = os.path.join(download_path, 'a.mp4')
         trimmed_filename = os.path.join(download_path, 'trimmed_a.mp4')
         new_url = None
@@ -66,9 +68,10 @@ def views(request):
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': downloaded_filename,
-                'username': 'oauth2',
-                'password': '',  # OAuth2
+                'nocheckcertificate': True,
+                'continuedl': False  # Disable resuming downloads
             }
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
                 
@@ -77,19 +80,28 @@ def views(request):
                     raise FileNotFoundError(f"Downloaded file {downloaded_filename} does not exist.")
                 
                 # Trim the video
-                logger.info(f"Trimming video from {downloaded_filename} to {trimmed_filename}")
+                print(f"Trimming video from {downloaded_filename} to {trimmed_filename}")
                 trim_video(downloaded_filename, trimmed_filename, start_time, end_time)
                 
                 # Upload to S3
                 s3_url = upload_to_s3(trimmed_filename, S3_BUCKET_NAME, S3_REGION_NAME, S3_ACCESS_KEY, S3_SECRET_KEY)
-                logger.info(f"Uploaded to S3: {s3_url}")
+                print(f"Uploaded to S3: {s3_url}")
                 trimmed_video_file_url = s3_url
 
         except Exception as e:
             new_url = None
-            logger.error(f"Exception: {e}")
+            print(f"Exception: {e}")
+
+        finally:
+            # Delete the original and trimmed files after processing
+            if os.path.isfile(downloaded_filename):
+                os.remove(downloaded_filename)
+                print(f"Deleted file: {downloaded_filename}")
+            if os.path.isfile(trimmed_filename):
+                os.remove(trimmed_filename)
+                print(f"Deleted file: {trimmed_filename}")
         
-        logger.info("Final new_url: ", new_url)
+        print("Final new_url: ", new_url)
         return render(request, 'index.html', {'new_url': new_url, 'trimmed_video_file_url': trimmed_video_file_url})
     else:
         return render(request, 'index.html')

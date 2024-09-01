@@ -100,14 +100,15 @@
         <label for="link">Paste link:</label>
         <input type="text" name="link" id="link" value="" required>
         
-        <label for="start_time">Start time:</label>
-        <input type="text" name="start_time" id="start_time" value="" required>
+        <label for="start_time">Start time (HH:MM:SS):</label>
+        <input type="text" name="start_time" id="start_time" value="" placeholder="00:00:00">
         
-        <label for="end_time">End time:</label>
-        <input type="text" name="end_time" id="end_time" value="" required>
+        <label for="end_time">End time (HH:MM:SS):</label>
+        <input type="text" name="end_time" id="end_time" value="" placeholder="00:00:00">
         
         <input type="submit" value="Download">
     </form>
+    
     
     <div id="loading" class="loading">
         <div class="loading-spinner"></div>
