@@ -2,7 +2,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 from django.shortcuts import render
 import os
-from moviepy.editor import VideoFileClip
+import ffmpeg
 from decouple import config
 import yt_dlp
 from django.views.decorators.csrf import csrf_exempt
@@ -37,11 +37,9 @@ def trim_video(input_path, output_path, start_time, end_time):
         print(f"Error: File {input_path} does not exist.")
         return
     try:
-        with VideoFileClip(input_path) as video:
-            trimmed_video = video.subclip(start_time, end_time)
-            trimmed_video.write_videofile(output_path, codec='libx264')
-    except Exception as e:
-        print(f"Error in trimming video: {e}")
+        ffmpeg.input(input_path, ss=start_time, to=end_time).output(output_path, codec='libx264').run()
+    except ffmpeg.Error as e:
+        print(f"Error in trimming video: {e.stderr.decode()}")
 
 def time_to_seconds(time_str):
     """Convert HH:MM:SS time string to seconds."""
